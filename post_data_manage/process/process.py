@@ -13,13 +13,8 @@ import random
 from scipy import sparse
 from tqdm import tqdm
 from .util import dir_check,write_list_list
-from .pro_process import pre_process
+from .pro_process import pre_process,idx
 
-
-
-def idx(df, col_name):
-    _idx_ = list(df.columns).index(col_name)
-    return _idx_
 
 def week2vec(week_id):
     # 周 one-hot 9
@@ -51,8 +46,7 @@ def got_time2vec(time_id):
     vec[int(time_id - 8.5 * 60) // 60 + 1] = 1
     return vec
 
-def ping():
-    print("pong")
+
 # got_time2vec(860) #[0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]
 
 def book_time2vec(time_id):
@@ -71,13 +65,14 @@ def book_time2vec(time_id):
 
 def get_trans_graph(block):
     temp = []
-    sps = np.load(ws + '/data/graph/trans_mean_time.npy', allow_pickle=True)
+    sps = np.load( '/data/graph/trans_mean_time.npy', allow_pickle=True)
     for nn in range(10):
         temp.append(sps[nn].toarray())
+    return np.array(temp)
 
 
 def get_neighbor_graph(block):
-    sp = np.load(ws + '/data/graph/neighbor_graph.npy', allow_pickle=True)
+    sp = np.load('/data/graph/neighbor_graph.npy', allow_pickle=True)
     return sp[0].toarray()
 
 
@@ -86,7 +81,7 @@ def load_node_info(fin):
 
 
 def json2dic(name_json):
-    with open(ws + '/data/' + name_json + '.json', 'r') as fr:
+    with open( '/data/' + name_json + '.json', 'r') as fr:
         return json.load(fr)
 
 
@@ -104,13 +99,19 @@ def create_sample(fin_original='',fin_temp='',fout_temp='',day_window=(0, 10), b
             dic_dis_cal[str(fro) + '-' + str(to)] = int(geodesic((a, b), (c, d)).meters)
             return dic_dis_cal[str(fro) + '-' + str(to)]
     remove_cnt=0
-    [df, df_sim, df_cou]= fin_temp
     # 读取数据
-    # df = pd.read_csv(fin_temp + "/total.csv", sep=',', encoding='utf-8')  # 总订单数据
-    # df_sim = pd.read_csv(fin_temp+ "/simplified.csv", sep=',', encoding='utf-8')  # 简化订单数据
-    # df_cou = pd.read_csv(fin_temp + "/courier_feature.csv", sep=',', encoding='utf-8')# 快递员信息
+    if fin_temp!='':
+        df = pd.read_csv(fin_temp + "/total.csv", sep=',', encoding='utf-8')  # 总订单数据
+        df_sim = pd.read_csv(fin_temp+ "/simplified.csv", sep=',', encoding='utf-8')  # 简化订单数据
+        df_cou = pd.read_csv(fin_temp + "/courier_feature.csv", sep=',', encoding='utf-8')# 快递员信息
+    else:
+        if fin_original=='':
+            print('请指定原始文件路径')
+            return
+        else:
+            df,df_sim,df_cou=pre_process(fin=fin_original, fout=fout_temp)
 
-    geo = [geohash2.encode(lat, lon, 8) for lat, lon in zip(df['订单纬度'].astype(float), df['订单经度'].astype(float))]
+    geo = [geohash2.encode(lat, lon, 8) for lat, lon in zip(df['订单纬度'], df['订单经度'])]
     dic_geo2index = {}  # 字典 geohash到点的索引的映射 如dic['wtw31evn']=3
     ver = sorted(list(set(geo)))
     geo_cnt = 0
@@ -204,9 +205,6 @@ def create_sample(fin_original='',fin_temp='',fout_temp='',day_window=(0, 10), b
 
         ##快递员个性特征
         cou_id = cou_v[0][idx_courier_id]
-        if cou_id is None :
-            print('skip')
-            continue
         cou_index = list(df_cou['id']).index(int(cou_id))
         cou_fea = cou_value[cou_index][2:] #@ 因为前两列是ID_，和ID信息
         global_temp = today_temp + list(cou_fea)
@@ -292,7 +290,6 @@ def create_sample(fin_original='',fin_temp='',fout_temp='',day_window=(0, 10), b
 
                 rem_temp_sub = list(sim_value[int(rem) - 1][3:-3])
                 rem_temp_sub.remove(rem_temp_sub[0])  # 移除揽件时间
-                # tag_mqq
                 rem_temp_sub.append(dis_temp)
                 rem_temp_sub.append(abs_temp)
                 rem_temp_sub.append(cou_v[pre_end][idx_promised_time] - cou_v[pre_end][idx_accept_time])
@@ -384,18 +381,6 @@ def create_sample(fin_original='',fin_temp='',fout_temp='',day_window=(0, 10), b
     eta_np = np.array(eta)  # (n, 25) 25个订单是实际eta，不足补-1
     eta = []
 
-    # 保存数据到文件
-    # np.save(ws + '/data/sample/last_x.npy', last_x)
-    # np.save(ws + '/data/sample/global_x.npy', global_x)
-    # np.save(ws + '/data/sample/unpick_x.npy', unpick_x)
-    # np.save(ws + '/data/sample/unpick_len.npy', unpick_len)
-    # np.save(ws + '/data/sample/unpick_geo.npy', unpick_geo)
-    # np.save(ws + '/data/sample/days_np.npy', days_np)
-    # np.save(ws + '/data/sample/order_np.npy', order_np)
-    # np.save(ws + '/data/sample/index_np.npy', index_np)
-    # np.save(ws + '/data/sample/eta_np.npy', eta_np)
-    # np.save(ws + '/data/sample/index_np.npy', index_np)
-    # print(remove_cnt)
     return last_x, last_len, global_x, unpick_x, unpick_len, unpick_geo, days_np, order_np, index_np, eta_np, dic_geo2index
 
 #len_range[1]=25
@@ -420,46 +405,19 @@ def create_sample(fin_original='',fin_temp='',fout_temp='',day_window=(0, 10), b
 # print(G_neighbor.shape)  # (点数*点数) #点的个数取决于运营区
 # print(G_X.shape)# (点数*3) 纬度 经度 累计单数
 
-def process_main(data_df=None):
-    df, df_sim, cou_df = pre_process( is_test=False,data_df=data_df) #
-    print("pro_process finish ")
-    last_x, last_len, global_x, unpick_x, unpick_len, unpick_geo, days_np, order_np, index_np, eta_np, dic_geo2index=create_sample(fin_temp=[df, df_sim, cou_df], day_window=(50,60), block={0},
-                                    label_range=(0, 120), len_range=(1, 25), graph_ret=False)
-    print("process_main finish ")
-    return last_x, last_len, global_x, unpick_x, unpick_len, unpick_geo, days_np, order_np, index_np, eta_np, dic_geo2index
-
-
 if __name__ == "__main__":
-    # if 0:
-    #     # 用法一：基于原始数据生成样本，除样本参数外需设置原始文件路径fin_original
-    #     #   以及中继文件输出路径fout_temp(目录)，因为预处理时间较长，有必要存储预处理结果，以节省构造不同样本的时间
-    #     fout = ws + '/data/dataset/39026_0-120/train_order_39026_0-120.npy'
-    #     fin_original=ws + '/data/raw/cnalgo_gg_order_data_for_cooperation_080910.csv'
-    #     fout_temp=ws + '/data/dataset/temp_39026/'
-    #     np.save(fout, create_sample(fin_original=fin_original,fout_temp=fout_temp,day_window=(0, 75), block={39026},
-    #                                 label_range=(0, 120), len_range=(1, 25),graph_ret=False))
-
-    #     last_x, last_len, global_x, unpick_x, unpick_len, unpick_geo, days_np, order_np, index_np, eta_np, dic_geo2index = np.load(
-    #         fout, allow_pickle=True)
-    #     print(np.max(index_np))
-    # fin_temp = '/mnt/hgfs/share_vm/tmp/hangzhou_10blocks/'
-    # fout = '/mnt/hgfs/share_vm/tmp/test_order.npy'
-    # dir_check(fout)
-    # print(fout)
-    # np.save(fout, create_sample(fin_temp=fin_temp, day_window=(50,60), block={0},
-    #                                 label_range=(0, 120), len_range=(1, 25), graph_ret=False))
-    # last_x, last_len, global_x, unpick_x, unpick_len, unpick_geo, days_np, order_np, index_np, eta_np, dic_geo2index = np.load(fout, allow_pickle=True)
-    
-    # print(np.max(index_np))
-    # print(len(unpick_x))   
-    # print("success")
-    # if 1: # 读取构造的数据并观察
-    #     fin = ws + '/data/dataset/hangzhou-b10_0-120_1-25/test_order.npy'
-    #     last_x, last_len, global_x, unpick_x, unpick_len, unpick_geo, days_np, order_np, index_np, eta_np, dic_geo2index = np.load(fin, allow_pickle=True)
-
-    #     for idx, x in enumerate(unpick_x):
-    #         print(x)
-    process_main()
+    if 0:
+        ## 用法二： 基于中继文件（预处理后的数据）生成样本，除样本参数外需设置中继文件路径fin_temp
+        ##注意：fin_temp应对应目录，而非文件，目录下应有 total simplified courier_feature 三个csv文件
+        fin_temp =  '/data/temp/shanghai_10blocks/'
+        fout =  '/data/dataset/shanghai-b10_0-120_1-25/test_order.npy'
+        dir_check(fout)
+        print(fout)
+        np.save(fout, create_sample(fin_temp=fin_temp, day_window=(50,60), block={0},
+                                    label_range=(0, 120), len_range=(1, 25), graph_ret=False))
+        last_x, last_len, global_x, unpick_x, unpick_len, unpick_geo, days_np, order_np, index_np, eta_np, dic_geo2index = np.load(fout, allow_pickle=True)
+        print(np.max(index_np))
+        print(len(unpick_x))
 
 
 

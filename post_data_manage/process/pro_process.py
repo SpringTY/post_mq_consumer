@@ -19,6 +19,7 @@ from .util import dir_check,write_list_list
 
 
 
+
 #随机选取k个相邻的运营区
 def get_adjacent_blocks(fin='', k=10):
     df = pd.read_csv(fin, sep=',', encoding='utf-8', header=None, names=['日期', '运营区id', '城市', '快递员id', \
@@ -66,7 +67,34 @@ def split_trace(df):
     courier_l.append(df[f:t])
     return courier_l
 
-def drop_unnormal(df):
+#剔除离群值
+# def drop_unnormal(df):
+#     keep=[]
+#     out_cnt, short_cnt, similar_cnt= 0, 0, 0
+#
+#     courier_l=split_trace(df)
+#     for c in courier_l:
+#         c_v=c.values
+#         for n in range(c.shape[0]):
+#             if c.shape[0]<=5: ##轨迹内不多于五单直接舍弃
+#                 keep.append(False)
+#                 short_cnt+=1
+#                 continue
+#             if n!=0 and c_v[n][-2]==0 and c_v[n][-7]<1:##一分钟内不移动则认为是一单，其余舍弃
+#                 keep.append(False)
+#                 similar_cnt+=1
+#                 continue
+#             if n<c.shape[0]-1:
+#                 if c_v[n][-7]!=0 and c_v[n+1][-7]!=0:
+#                     if c_v[n][-2]/c_v[n][-7]>500 and c_v[n+1][-2]/c_v[n+1][-7]>500:##与前后两单都有较大偏差，舍弃
+#                         keep.append(False)
+#                         out_cnt+=1
+#                         continue
+#             keep.append(True)
+#     print('轨迹过短剔除{}单 数据冗余剔除{}单 gps漂移剔除{}单'.format(short_cnt,similar_cnt,out_cnt))
+#     return df[keep]
+
+def drop_unnormal(df, fout):
     # 删除gps漂移点
     keep = []
     out_cnt = 0
@@ -115,7 +143,7 @@ def drop_unnormal(df):
 
     str_  = f'去除经纬度漂移单{out_cnt}, 过滤快递员数/总快递员数:{len(remove_c)}/{len(couriers)}, 过滤单数{remove_cnt}, 数据冗余剔除{similar_cnt}单'
     print(str_)
-    # write_list_list(fout +'/data_info.txt', [str_], 'w')
+    write_list_list(fout +'/data_info.txt', [str_], 'w')
 
     report_df = pd.DataFrame({'快递员过滤条件': ['工作少于5天', '每日平均移动距离少于50m', '每日平均单数少于3单', '每两单之间的时间小于3min','每两单之间的平均距离少于20m'],
                               '过滤数量':[ len(x & remove_c) for x in [rmv_wd, rmv_dmd, rmv_omd, rmv_tmo, rmv_dmo]],
@@ -213,15 +241,16 @@ def greedy_sort(sta,points,df_v):
     return ans[:-1]
 
 
-def pre_process( is_test=False,data_df=None):
+def pre_process(fin, fout, is_test=False):
+    print('原始数据：' + fin)
+    print('中继文件输出目录：' + fout)
     nrows = 50000 if is_test else None
-    df = data_df
-    # df = pd.read_csv(fin, sep=',', encoding='utf-8', header=None, names=['日期', '运营区id', '城市', '快递员id', \
-    #                                                  '接单时间', '预约时间1', '预约时间2', '订单经度', '订单纬度', \
-    #                                                 '订单所属区块id', '区块类型id', '区块类型', '订单揽收时间',\
-    #                                                         '揽收最近时间', '揽收最近经度', '揽收最近纬度', \
-    #                                                             '揽收轨迹精度', '接单最近时间', '接单最近经度', '接单最近纬度',
-    #                                                                 '接单轨迹精度'], nrows=nrows)
+    df = pd.read_csv(fin, sep=',', encoding='utf-8', header=None, names=['日期', '运营区id', '城市', '快递员id', \
+                                                     '接单时间', '预约时间1', '预约时间2', '订单经度', '订单纬度', \
+                                                    '订单所属区块id', '区块类型id', '区块类型', '订单揽收时间',\
+                                                            '揽收最近时间', '揽收最近经度', '揽收最近纬度', \
+                                                                '揽收轨迹精度', '接单最近时间', '接单最近经度', '接单最近纬度',
+                                                                    '接单轨迹精度'], nrows=nrows)
     print('初始文件读入完成')
     df = df.drop_duplicates()  #原始数据中有重复的行，需要去掉
     df = df.reset_index(drop=True)
@@ -297,7 +326,7 @@ def pre_process( is_test=False,data_df=None):
     ##剔除过短的轨迹，重复冗余订单、剔除gps漂移点
     ##对快递员做过滤，剔除重复冗余订单、删除gps漂移点
     # df = drop_unnormal(df)
-    df, courier_information = drop_unnormal(df)
+    df, courier_information = drop_unnormal(df, fout)
     couriers, work_days, dis_mean_day, order_mean_day, time_mean_order, dis_mean_order = courier_information
     #np.save('./courier_feature_dic.npy', [couriers, dic_work_days, dic_dis_mean, dic_order_mean, dic_time_mean, dis_mean_order])
 
@@ -367,7 +396,7 @@ def pre_process( is_test=False,data_df=None):
     df['经度差'] = df['订单经度'].astype(float) - df['上一经度'].astype(float)
     df['纬度差'] = df['订单纬度'].astype(float) - df['上一纬度'].astype(float)
     df['时间差单位化'] = df['揽收时间1'] - df['上一揽收时间']
-    geo = [geohash2.encode(lat, lon, 8) for lat, lon in zip(df['订单纬度'].astype(float), df['订单经度'].astype(float))]
+    geo = [geohash2.encode(lat, lon, 8) for lat, lon in zip(df['订单纬度'], df['订单经度'])]
     df.insert(12, 'geohash', geo)
     print('相邻订单信息更新完成')
     #     print(df.columns)
@@ -398,15 +427,21 @@ def pre_process( is_test=False,data_df=None):
         'order_mean': order_mean
     }
     cou_df = pd.DataFrame(cou_dic)
+    if fout != '':
+        dir_check(fout)
+        df.to_csv(fout+'total.csv', index=False)
+        df_sim.to_csv(fout+'simplified.csv', index=False)
+        cou_df.to_csv(fout+'courier_feature.csv', index=False)
+        print('中继文件存储完成')
     print('数据预处理完成')
     return df, df_sim, cou_df
 
 if __name__ == "__main__":
 
-    fin= '/mnt/hgfs/share_vm/tmp/hangzhou_10blocks.csv'
-    temp_fout='/mnt/hgfs/share_vm/tmp/hangzhou_10blocks/'
+    fin=ws + '/data/raw_data/shanghai_50blocks.csv'
+    temp_fout=ws + '/data/temp/shanghai_50blocks/'
 
-    pre_process(fin=fin,fout=temp_fout, is_test=False) #
+    pre_process(fin=fin,fout=temp_fout, is_test=False)#
 
     # 可视化快递员特征
     #couriers, work_days, dis_mean_day, order_mean_day, time_mean_order, dis_mean_order = np.load('./courier_feature_dic.npy', allow_pickle=True)
@@ -415,4 +450,3 @@ if __name__ == "__main__":
     # vis_distribution_auto(dis_mean_order.values(), './distance_mean_order')
     # print(vis_distribution(dis_mean_order.values(), sections=[50 * i for i in range(13)]))
     #vis_distribution_auto(order_mean_day.values())
-
