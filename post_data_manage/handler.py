@@ -15,7 +15,7 @@ def write_to_file(path, data):
             line = item['raw']
             file.write(line+'\n')
             pass
-
+ws = '/mnt/hgfs/share_vm/tmp/ws'
 def do_task(task_tag):
     [region,date] = task_tag.split('-')
     uuid = 'test_for_uuid'
