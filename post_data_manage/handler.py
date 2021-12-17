@@ -15,11 +15,10 @@ def write_to_file(path, data):
             line = item['raw']
             file.write(line+'\n')
             pass
-ws = '/mnt/hgfs/share_vm/tmp/ws'
+ws = os.path.dirname(__file__) +'/ws/'
 def do_task(task_tag):
     [region,date] = task_tag.split('-')
-    uuid = 'test_for_uuid'
-    ws = '/mnt/hgfs/share_vm/tmp/ws'
+    uuid = task_tag
     fin= ws +'/raw_data/'+uuid+'.csv'
     fin_temp = temp_fout=ws + '/temp/' + uuid +'/'
     

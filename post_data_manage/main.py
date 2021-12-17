@@ -35,10 +35,10 @@ if __name__ == '__main__':
     consumer.start()
     while True :
         for msg in consumer.pull('post_data_manage'):
-            try:
-                handler_msg(msg)
-            except:
-                print("An exception occurred")
+            # try:
+            handler_msg(msg)
+            # except:
+            #     print("An exception occurred")
         time.sleep(1) # 防止CPU空转
         print("[consumer is runing] %s"%time.asctime( time.localtime(time.time()) ))
     print(__name__)
