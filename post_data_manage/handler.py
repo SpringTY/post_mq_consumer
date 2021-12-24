@@ -1,5 +1,5 @@
 from data.mongo import convert, save_to_post_predict
-from mysql.update_task import update_task
+from db.update_task import update_task
 from process.pro_process import pre_process
 from process.process import create_sample
 import os
@@ -23,8 +23,10 @@ ws = os.path.dirname(__file__) + '/ws/'
 
 
 def do_task(task_tag, task_id):
+    if '-' not in task_tag:
+        return 
     [region, date] = task_tag.split('-')
-    uuid = task_tag
+    uuid = task_id
     fin = ws + '/raw_data/'+uuid+'.csv'
     fin_temp = temp_fout = ws + '/temp/' + uuid + '/'
     update_task(uuid, 2) 
