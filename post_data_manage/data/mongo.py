@@ -69,7 +69,9 @@ def save_to_post_predict(region, date, unpick_x, unpick_len, order_np):
         print(type(len_))
         print(type(date))
         l_insert.append(x)
-        #break
+        # break
+    if len(l_insert) == 0:
+        return
     col_post_predict.insert_many(l_insert)
 
 
