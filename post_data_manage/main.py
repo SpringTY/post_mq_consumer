@@ -30,9 +30,8 @@ if __name__ == '__main__':
     consumer.start()
     while True:
         for msg in consumer.pull('post_data_manage'):
-            handler_msg(msg)
             try:
-                pass  # handler_msg(msg)
+                handler_msg(msg)
             except:
                 print("An exception occurred")
         time.sleep(1)  # 防止CPU空转
